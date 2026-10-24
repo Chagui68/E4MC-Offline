@@ -5,13 +5,14 @@
   "name": "e4mc",
   "description": "Open a LAN server to anyone, anywhere, anytime.",
   "authors": [
+    "Chagui68",
     "skyevg"
   ],
   "contact": {
     "homepage": "https://e4mc.link/",
-    "sources": "https://github.com/vgskye/e4mc-minecraft-architectury"
+    "sources": "https://github.com/Chagui68/E4MC-Offline"
   },
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "icon": "e4mc_icon.png",
   "environment": "*",
   "entrypoints": {
