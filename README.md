@@ -13,13 +13,15 @@ Supports Fabric, Forge and NeoForge.
 
 ### Offline mode
 
-Offline mode is **disabled by default**. To enable it, edit `config/e4mc.toml`:
+Offline mode is **enabled by default** (`offlineMode = true`). To turn it off and use plain e4mc behavior, edit `config/e4mc.toml`:
 
 ```toml
-offlineMode = true
+offlineMode = false
 ```
 
-Then open the world to LAN. With offline mode on:
+If you used an earlier version, your existing `config/e4mc.toml` keeps the value it already has. Set `offlineMode = true` there yourself.
+
+With offline mode on:
 
 - **Premium names still use Mojang authentication.** When a player joins, E4MC Offline asks Mojang whether that name belongs to a paid account. If it does, the player must log in with that account, so nobody can take a premium player's name.
 - **Every other player must log in with a password.** On their first join they run `/register <password> <password>`, and on later joins `/login <password>`. Until then they cannot move, chat, use commands, interact or touch inventories. Players who do not log in within 60 seconds are kicked, and a wrong password kicks the player.
@@ -69,7 +71,7 @@ All options live in `config/e4mc.toml`:
 | `relayHost` / `relayPort` | `test.e4mc.link` / `25575` | Relay used when the broker is disabled |
 | `restoreDedicatedCommands` | `true` | Enable dedicated-server commands such as `/ban` and `/whitelist` |
 | `useWhiteList` | `false` | Use a whitelist on LAN worlds |
-| `offlineMode` | `false` | Run LAN worlds in offline mode with password login for non-premium players |
+| `offlineMode` | `true` | Run LAN worlds in offline mode with password login for non-premium players |
 | `hostEnabled` | `true` | Share LAN worlds with e4mc |
 | `dialtoneHostEnabled` | `true` | Enable Dialtone peer-to-peer connections as the host |
 | `dialtonePlayerEnabled` | `true` | Enable Dialtone peer-to-peer connections as the player |
