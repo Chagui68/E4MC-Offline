@@ -2,9 +2,11 @@ package link.e4mc.mixin;
 
 import com.mojang.authlib.GameProfile;
 import link.e4mc.DialtoneConnectionExtensions;
+import link.e4mc.Mirror;
 import link.e4mc.OfflineAuth;
 import link.e4mc.dialtone.DialtoneAddress;
 import net.minecraft.network.Connection;
+
 import net.minecraft.network.protocol.login.ServerboundHelloPacket;
 import net.minecraft.network.protocol.login.ServerboundKeyPacket;
 import net.minecraft.server.MinecraftServer;
@@ -14,9 +16,12 @@ import net.minecraft.util.CryptException;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
@@ -38,11 +43,33 @@ public class ServerLoginPacketListenerImplMixin {
         return connection.isMemoryConnection() ? server.getSingleplayerProfile() : null;
     }
 
+    @Unique
+    private volatile Boolean e4mc$premium = null;
+
+    // Offline mode: hold the hello until the Mojang lookup finishes, off the network thread, then replay it.
+    @Inject(method = "handleHello", at = @At("HEAD"), cancellable = true)
+    private void lookUpPremiumFirst(ServerboundHelloPacket packet, CallbackInfo ci) {
+        if (!OfflineAuth.enabled() || e4mc$premium != null || connection.isMemoryConnection()) {
+            return;
+        }
+        ci.cancel();
+        var self = (ServerLoginPacketListenerImpl) (Object) this;
+        OfflineAuth.isPremium(packet.name()).thenAccept(premium -> {
+            e4mc$premium = premium;
+            try {
+                self.handleHello(packet);
+            } catch (Exception e) {
+                // Vanilla would hit this on the network thread and drop the connection.
+                connection.disconnect(Mirror.literal("Login failed: " + e.getMessage()));
+            }
+        });
+    }
+
     // Offline mode: premium names still go through Mojang authentication, the rest join with an offline UUID.
     @Redirect(method = "handleHello", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;usesAuthentication()Z"), require = 0)
-    private boolean authenticatePremiumOnly(MinecraftServer server, ServerboundHelloPacket packet) {
+    private boolean authenticatePremiumOnly(MinecraftServer server) {
         if (OfflineAuth.enabled()) {
-            return OfflineAuth.isPremium(packet.name());
+            return Boolean.TRUE.equals(e4mc$premium);
         }
         return server.usesAuthentication();
     }

@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
@@ -136,29 +137,32 @@ public class OfflineAuth {
     /**
      * Whether a Mojang account with this name exists. Premium names keep Mojang authentication,
      * so a cracked client cannot take a premium player's name.
-     * shortcut: blocking HTTP on the login thread (cached per name), move async if logins stall.
+     * Asynchronous so a slow Mojang API never blocks the network thread other players share.
      */
-    public static boolean isPremium(String name) {
+    public static CompletableFuture<Boolean> isPremium(String name) {
         Boolean cached = PREMIUM_CACHE.get(name.toLowerCase());
         if (cached != null) {
-            return cached;
+            return CompletableFuture.completedFuture(cached);
         }
+        HttpRequest request;
         try {
-            var request = HttpRequest.newBuilder(new URI("https://api.mojang.com/users/profiles/minecraft/" + name))
-                    .timeout(Duration.ofSeconds(3))
+            request = HttpRequest.newBuilder(new URI("https://api.mojang.com/users/profiles/minecraft/" + name))
+                    .timeout(Duration.ofSeconds(5))
                     .build();
-            int status = HTTP.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
-            if (status == 200 || status == 204 || status == 404) {
-                boolean premium = status == 200;
+        } catch (Exception e) {
+            return CompletableFuture.completedFuture(false);
+        }
+        return HTTP.sendAsync(request, HttpResponse.BodyHandlers.discarding()).handle((response, error) -> {
+            if (error == null && (response.statusCode() == 200 || response.statusCode() == 204 || response.statusCode() == 404)) {
+                boolean premium = response.statusCode() == 200;
                 PREMIUM_CACHE.put(name.toLowerCase(), premium);
                 return premium;
             }
-            E4mcClient.LOGGER.warn("Mojang profile lookup for {} returned {}, treating as non-premium", name, status);
-        } catch (Exception e) {
-            E4mcClient.LOGGER.warn("Mojang profile lookup for {} failed, treating as non-premium", name, e);
-        }
-        // Not cached: retry next login. Non-premium still has to pass the password check.
-        return false;
+            // Not cached: retry next login. Non-premium still has to pass the password check.
+            E4mcClient.LOGGER.warn("Mojang profile lookup for {} failed ({}), treating as non-premium", name,
+                    error != null ? error.toString() : "HTTP " + response.statusCode());
+            return false;
+        });
     }
 
     /** Players with an offline (unverified) UUID must log in. The host on the local connection never does. */

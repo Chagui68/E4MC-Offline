@@ -1,10 +1,7 @@
 package link.e4mc.mixin;
 
-import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelInitializer;
 import io.netty.channel.EventLoopGroup;
-import io.netty.handler.flush.FlushConsolidationHandler;
 import link.e4mc.Config;
 import link.e4mc.E4mcClient;
 import link.e4mc.QuiclimeSession;
@@ -27,24 +24,8 @@ public abstract class ServerConnectionListenerMixin {
 
     @ModifyArg(method = "startTcpServerListener", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/ServerBootstrap;childHandler(Lio/netty/channel/ChannelHandler;)Lio/netty/bootstrap/ServerBootstrap;", remap = false))
     private ChannelHandler interceptHandler(ChannelHandler childHandler) {
-        if (Config.INSTANCE.offlineMode.value()) {
-            childHandler = e4mc$withFlushConsolidation(childHandler);
-        }
         e4mc$childHandler = childHandler;
         return childHandler;
-    }
-
-    // Vanilla flushes after every packet. Batching the flushes queued on the event loop sends
-    // fewer, fuller network packets (LAN, e4mc relay and Dialtone all share this handler).
-    @Unique
-    private static ChannelHandler e4mc$withFlushConsolidation(ChannelHandler vanilla) {
-        return new ChannelInitializer<>() {
-            @Override
-            protected void initChannel(Channel channel) {
-                channel.pipeline().addLast(vanilla);
-                channel.pipeline().addFirst(new FlushConsolidationHandler(FlushConsolidationHandler.DEFAULT_EXPLICIT_FLUSH_AFTER_FLUSHES, true));
-            }
-        };
     }
 
     @ModifyArg(method = "startTcpServerListener", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/ServerBootstrap;group(Lio/netty/channel/EventLoopGroup;)Lio/netty/bootstrap/ServerBootstrap;", remap = false))
