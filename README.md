@@ -82,10 +82,10 @@ All options live in `config/e4mc.toml`:
 ## Building
 
 ```bash
-./gradlew build -PcurseforgeApiToken=none -PmodrinthApiToken=none
+./gradlew build
 ```
 
-The token properties are only used for publishing; any value works for a local build. Jars are written to `fabric/build/libs`, `forge/build/libs` and `neoforge/build/libs`.
+Jars are written to `fabric/build/libs`, `forge/build/libs` and `neoforge/build/libs`. The Fabric jar for 26.1 and newer is built separately with `./gradlew :fabric:modernRemapJar`.
 
 ## Authors
 

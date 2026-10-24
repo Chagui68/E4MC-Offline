@@ -127,7 +127,7 @@ publishMods {
 
     // Uncomment your desired platform(s)
     curseforge {
-        accessToken = project.curseforgeApiToken
+        accessToken = providers.gradleProperty("curseforgeApiToken")
         projectId = project.curseforgeId
         minecraftVersions.addAll(
                 "1.18", "1.18.1", "1.18.2",
@@ -149,7 +149,7 @@ publishMods {
     }
 
     modrinth {
-        accessToken = project.modrinthApiToken
+        accessToken = providers.gradleProperty("modrinthApiToken")
         projectId = project.modrinthId
         additionalFiles.from(sourcesJar.archiveFile)
         minecraftVersions.addAll(
@@ -170,7 +170,7 @@ publishMods {
 
     curseforge("curseforgeModern") {
         displayName = "[Fabric 26.1+] $project.version"
-        accessToken = project.curseforgeApiToken
+        accessToken = providers.gradleProperty("curseforgeApiToken")
         projectId = project.curseforgeId
         file = modernRemapJar.archiveFile
         version = project.version + "-fabric-modern"
@@ -194,7 +194,7 @@ publishMods {
 
     modrinth("modrinthModern") {
         displayName = "[Fabric 26.1+] $project.version"
-        accessToken = project.modrinthApiToken
+        accessToken = providers.gradleProperty("modrinthApiToken")
         projectId = project.modrinthId
         file = modernRemapJar.archiveFile
         version = project.version + "-fabric-modern"

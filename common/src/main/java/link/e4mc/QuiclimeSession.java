@@ -374,7 +374,8 @@ public class QuiclimeSession {
                                                             fail(dialtoneChannelFuture.cause());
                                                             throw new RuntimeException(dialtoneChannelFuture.cause());
                                                         }
-                                                        dialtoneChannel = (DialtoneServerChannel) dialtoneChannelFuture.get();
+                                                        // A ChannelFuture's get() is always null; the bound channel comes from channel().
+                                                        dialtoneChannel = (DialtoneServerChannel) ((ChannelFuture) dialtoneChannelFuture).channel();
                                                         if (OfflineAuth.enabled() && Agnos.isClient()) {
                                                             String code = DialtoneCode.format(dialtoneChannel.endpoint.id());
                                                             Mirror.addMessage(Mirror.append(

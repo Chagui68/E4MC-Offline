@@ -107,7 +107,7 @@ publishMods {
 
     // Uncomment your desired platform(s)
     curseforge {
-        accessToken = project.curseforgeApiToken
+        accessToken = providers.gradleProperty("curseforgeApiToken")
         projectId = project.curseforgeId
         minecraftVersions.addAll(
                 "1.20.2", "1.20.3", "1.20.4", "1.20.5", "1.20.6",
@@ -126,7 +126,7 @@ publishMods {
     }
 
     modrinth {
-        accessToken = project.modrinthApiToken
+        accessToken = providers.gradleProperty("modrinthApiToken")
         projectId = project.modrinthId
         additionalFiles.from(sourcesJar.archiveFile)
         minecraftVersions.addAll(
