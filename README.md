@@ -26,6 +26,7 @@ With offline mode on:
 - **Premium names still use Mojang authentication.** When a player joins, E4MC Offline asks Mojang whether that name belongs to a paid account. If it does, the player must log in with that account, so nobody can take a premium player's name.
 - **Every other player must log in with a password.** On their first join they run `/register <password> <password>`, and on later joins `/login <password>`. Until then they cannot move, chat, use commands, interact or touch inventories. Players who do not log in within 60 seconds are kicked, and a wrong password kicks the player.
 - **Names cannot be stolen while in use.** A player cannot join with the name of someone already online, including the host.
+- **Fewer network packets.** Vanilla sends every game packet with its own flush. E4MC Offline groups the packets queued at the same moment, so the server sends fewer, fuller network packets. This saves upload bandwidth on the host and helps players on weak connections.
 - **The relay connection tolerates bad networks better.** It survives network drops of up to 30 seconds (10 seconds otherwise) and uses BBR congestion control, which keeps throughput up on long-distance, lossy links.
 
 Passwords are stored hashed (PBKDF2) in `config/e4mc-offline-accounts.properties`, one line per player name. To reset a player's password, delete their line while the world is closed.
