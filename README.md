@@ -36,6 +36,20 @@ Offline mode only affects worlds hosted from the client (integrated server). It 
 
 E4MC Offline also fixes a vanilla issue that applies with or without offline mode: a remote player using the host's name was given the host's profile before any authentication. Only the host's own local connection gets that profile now.
 
+### Fixed connection code
+
+With offline mode on, the host also gets a **fixed code** that never changes, shown in chat when the world opens to LAN:
+
+```
+Fixed code for players with E4MC Offline: 3f2a…c91e.7b04…5d10
+```
+
+Players who install E4MC Offline add that code as a normal server address in the multiplayer screen, once. They connect peer-to-peer through Dialtone (iroh), falling back to a relay when a direct connection is not possible. It works behind CGNAT and needs no port forwarding, domain or own relay. Players without the mod keep using the e4mc domain, which still changes every session.
+
+The code comes from a secret key stored in `config/e4mc-dialtone-host.key`. Back it up to keep the same code on another PC, and never share it: anyone with that file can pose as your server.
+
+This uses a [fork of iroh-java](https://github.com/Chagui68/iroh-java) that adds persistent keys and lookup by id through n0's public DNS service.
+
 ### Ping and distance
 
 Distance adds latency that no mod can remove. The public relay is picked close to the host, so a player far away still crosses that distance to reach it. What helps:

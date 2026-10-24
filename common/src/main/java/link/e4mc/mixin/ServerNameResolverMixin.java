@@ -4,6 +4,7 @@ import link.e4mc.Config;
 import link.e4mc.E4mcClient;
 import link.e4mc.SmugglersInetSocketAddress;
 import link.e4mc.TicketSmuggler;
+import link.e4mc.dialtone.DialtoneCode;
 import net.minecraft.client.multiplayer.resolver.*;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -14,6 +15,8 @@ import javax.naming.directory.Attribute;
 import javax.naming.directory.Attributes;
 import javax.naming.directory.DirContext;
 import javax.naming.directory.InitialDirContext;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -34,6 +37,9 @@ public class ServerNameResolverMixin {
             environment.put("com.sun.jndi.dns.timeout.retries", "1");
             dirContext = new InitialDirContext(environment);
             return serverAddress -> {
+                if (DialtoneCode.parse(serverAddress.getHost()) != null) {
+                    return Optional.empty();
+                }
                 var inner = innerHandler.lookupRedirect(serverAddress);
                 if (!Config.INSTANCE.dialtonePlayerEnabled.value()) {
                     return inner;
@@ -79,6 +85,12 @@ public class ServerNameResolverMixin {
 
     @Redirect(method = "resolveAddress", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/resolver/ServerAddressResolver;resolve(Lnet/minecraft/client/multiplayer/resolver/ServerAddress;)Ljava/util/Optional;"))
     private Optional<ResolvedServerAddress> resolveBogus(ServerAddressResolver instance, ServerAddress serverAddress) {
+        // A fixed Dialtone code has no DNS entry: connect peer-to-peer by endpoint id instead.
+        var endpointId = DialtoneCode.parse(serverAddress.getHost());
+        if (endpointId != null && Config.INSTANCE.dialtonePlayerEnabled.value()) {
+            var placeholder = new InetSocketAddress(InetAddress.getLoopbackAddress(), serverAddress.getPort());
+            return Optional.of(ResolvedServerAddress.from(new SmugglersInetSocketAddress(placeholder, endpointId)));
+        }
         var smuggledTicket = ((TicketSmuggler) (Object) serverAddress).e4mc$getSmuggledTicket();
         if (smuggledTicket != null) {
             return instance.resolve(serverAddress).map(addr -> ResolvedServerAddress.from(new SmugglersInetSocketAddress(addr.asInetSocketAddress(), smuggledTicket)));

@@ -19,6 +19,7 @@ import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.handler.codec.ByteToMessageCodec;
 import io.netty.incubator.codec.quic.*;
 import link.e4mc.dialtone.DialtoneAddress;
+import link.e4mc.dialtone.DialtoneCode;
 import link.e4mc.dialtone.DialtoneServerChannel;
 import link.e4mc.iroh.Endpoint;
 import net.minecraft.ChatFormatting;
@@ -374,6 +375,15 @@ public class QuiclimeSession {
                                                             throw new RuntimeException(dialtoneChannelFuture.cause());
                                                         }
                                                         dialtoneChannel = (DialtoneServerChannel) dialtoneChannelFuture.get();
+                                                        if (OfflineAuth.enabled() && Agnos.isClient()) {
+                                                            String code = DialtoneCode.format(dialtoneChannel.endpoint.id());
+                                                            Mirror.addMessage(Mirror.append(
+                                                                    Mirror.literal("Fixed code for players with E4MC Offline: "),
+                                                                    Mirror.withStyle(Mirror.literal(code), it -> it
+                                                                            .withClickEvent(Mirror.copyToClipboard(code))
+                                                                            .withColor(ChatFormatting.AQUA)
+                                                                            .withHoverEvent(Mirror.showText(Mirror.translatable("chat.copy.click"))))));
+                                                        }
                                                     });
                                         }
                                     }
