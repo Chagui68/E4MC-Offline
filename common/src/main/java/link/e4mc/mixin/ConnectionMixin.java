@@ -5,11 +5,18 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
 import link.e4mc.DialtoneConnectionExtensions;
+import link.e4mc.Mirror;
+import link.e4mc.OfflineAuth;
 import link.e4mc.SmugglersInetSocketAddress;
 import link.e4mc.dialtone.DialtoneAddress;
 import link.e4mc.dialtone.DialtoneAmbientSession;
 import link.e4mc.dialtone.DialtoneChannel;
 import net.minecraft.network.Connection;
+import net.minecraft.network.PacketListener;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ServerboundChatCommandPacket;
+import net.minecraft.network.protocol.game.ServerboundChatPacket;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -23,11 +30,62 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 
 @Mixin(Connection.class)
-public abstract class ConnectionMixin implements DialtoneConnectionExtensions {
+public abstract class ConnectionMixin implements DialtoneConnectionExtensions, OfflineAuth.State {
 
     @Shadow private Channel channel;
+    @Shadow private volatile PacketListener packetListener;
+    @Shadow public abstract boolean isMemoryConnection();
     @Unique
     private static DialtoneAddress e4mc$smuggledDialtoneAddress = null;
+    @Unique
+    private volatile boolean e4mc$loggedIn = false;
+    @Unique
+    private volatile long e4mc$lockedSince = 0;
+
+    @Override
+    public boolean e4mc$isLoggedIn() {
+        return e4mc$loggedIn;
+    }
+
+    @Override
+    public void e4mc$setLoggedIn() {
+        e4mc$loggedIn = true;
+    }
+
+    @Override
+    public long e4mc$lockedSince(long now) {
+        if (e4mc$lockedSince == 0) {
+            e4mc$lockedSince = now;
+        }
+        return e4mc$lockedSince;
+    }
+
+    // Offline mode: drop every gameplay packet from a player that has not logged in yet.
+    @Inject(method = "channelRead0(Lio/netty/channel/ChannelHandlerContext;Lnet/minecraft/network/protocol/Packet;)V", at = @At("HEAD"), cancellable = true)
+    private void gateUnauthenticated(ChannelHandlerContext ctx, Packet<?> packet, CallbackInfo ci) {
+        if (e4mc$loggedIn || !(packetListener instanceof ServerGamePacketListenerImpl listener)) {
+            return;
+        }
+        if (!OfflineAuth.needsLogin(listener.player.getGameProfile(), isMemoryConnection())) {
+            e4mc$loggedIn = true;
+            return;
+        }
+        long now = System.currentTimeMillis();
+        boolean firstPacket = e4mc$lockedSince == 0;
+        long lockedFor = now - e4mc$lockedSince(now);
+        var server = listener.player.getServer();
+        if (lockedFor > OfflineAuth.LOGIN_TIMEOUT_MS) {
+            ci.cancel();
+            server.execute(() -> listener.disconnect(Mirror.literal("You did not log in in time.")));
+        } else if (!OfflineAuth.isAllowedWhileLocked(packet)) {
+            ci.cancel();
+            if (firstPacket || packet instanceof ServerboundChatPacket || packet instanceof ServerboundChatCommandPacket) {
+                server.execute(() -> listener.player.sendSystemMessage(OfflineAuth.prompt(listener.player.getGameProfile().getName())));
+            }
+        } else if (firstPacket) {
+            server.execute(() -> listener.player.sendSystemMessage(OfflineAuth.prompt(listener.player.getGameProfile().getName())));
+        }
+    }
 
     @Override
     public byte[] e4mc$exportKeyingMaterial(byte[] label, byte[] context, int length) {

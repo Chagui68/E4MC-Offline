@@ -4,8 +4,10 @@ import com.mojang.authlib.GameProfile;
 import link.e4mc.Config;
 import link.e4mc.E4mcClient;
 import link.e4mc.Mirror;
+import link.e4mc.OfflineAuth;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.server.players.UserBanList;
 import net.minecraft.server.players.UserWhiteList;
@@ -28,6 +30,8 @@ public abstract class PlayerListMixin {
 
     @Shadow public abstract MinecraftServer getServer();
 
+    @Shadow public abstract ServerPlayer getPlayerByName(String name);
+
     @Inject(method = "/^<init>$/", at = @At("TAIL"))
     void injectListLoads(CallbackInfo ci) {
         if (Config.INSTANCE.restoreDedicatedCommands.value()) {
@@ -47,6 +51,11 @@ public abstract class PlayerListMixin {
 
     @Inject(method = "/^(canPlayerLogin|method_14586|checkCanJoin|m_6418_)$/", at = @At("HEAD"), cancellable = true)
     public void allowOwnerLogin(SocketAddress socketAddress, @Coerce Object gameProfile, CallbackInfoReturnable<Component> cir) {
+        // Offline mode: never kick an online player (or the host) for a newcomer using the same name.
+        if (OfflineAuth.enabled() && gameProfile instanceof GameProfile profile && getPlayerByName(profile.getName()) != null) {
+            cir.setReturnValue(Mirror.literal("A player with this name is already online."));
+            return;
+        }
         if (Mirror.isSingleplayerOwnerObj(getServer(), gameProfile)) {
             cir.setReturnValue(null);
         }

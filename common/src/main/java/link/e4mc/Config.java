@@ -21,7 +21,7 @@ public class Config extends ReflectiveConfig {
     public final TrackedValue<Boolean> restoreDedicatedCommands = this.value(true);
     @Comment("Whether to use whitelists on LAN worlds")
     public final TrackedValue<Boolean> useWhiteList = this.value(false);
-    @Comment("Whether to run LAN worlds in offline mode (no Mojang authentication). Anyone can join with any username, so whitelists and bans by name can be bypassed")
+    @Comment("Whether to run LAN worlds in offline mode. Premium names still authenticate with Mojang; other players must /register and /login with a password")
     public final TrackedValue<Boolean> offlineMode = this.value(false);
 
     @Comment("Whether to enable sharing LAN worlds with e4mc")

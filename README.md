@@ -19,11 +19,29 @@ Offline mode is **disabled by default**. To enable it, edit `config/e4mc.toml`:
 offlineMode = true
 ```
 
-Then open the world to LAN. Remote players join without Mojang authentication. The host keeps their real profile.
+Then open the world to LAN. With offline mode on:
 
-> **Warning:** in offline mode anyone with the domain can join using any username. Whitelists, bans and operator status are tied to names, so they can be bypassed by impersonating another player. Only share the domain with people you trust.
+- **Premium names still use Mojang authentication.** When a player joins, E4MC Offline asks Mojang whether that name belongs to a paid account. If it does, the player must log in with that account, so nobody can take a premium player's name.
+- **Every other player must log in with a password.** On their first join they run `/register <password> <password>`, and on later joins `/login <password>`. Until then they cannot move, chat, use commands, interact or touch inventories. Players who do not log in within 60 seconds are kicked, and a wrong password kicks the player.
+- **Names cannot be stolen while in use.** A player cannot join with the name of someone already online, including the host.
+- **The relay connection tolerates bad networks better.** It survives network drops of up to 30 seconds (10 seconds otherwise) and uses BBR congestion control, which keeps throughput up on long-distance, lossy links.
+
+Passwords are stored hashed (PBKDF2) in `config/e4mc-offline-accounts.properties`, one line per player name. To reset a player's password, delete their line while the world is closed.
+
+Passwords may only contain letters, numbers and `_ - . +`. The host never needs to log in.
+
+> **Note:** premium and non-premium players get different UUIDs, so player data from worlds played in plain offline mode does not carry over for premium players.
 
 Offline mode only affects worlds hosted from the client (integrated server). It never changes dedicated servers.
+
+E4MC Offline also fixes a vanilla issue that applies with or without offline mode: a remote player using the host's name was given the host's profile before any authentication. Only the host's own local connection gets that profile now.
+
+### Ping and distance
+
+Distance adds latency that no mod can remove. The public relay is picked close to the host, so a player far away still crosses that distance to reach it. What helps:
+
+- Players who install E4MC Offline (or e4mc) connect peer-to-peer through Dialtone when possible, skipping the relay.
+- Vanilla already compresses packets above 256 bytes, and since 1.20.2 adapts chunk sending to each player's connection.
 
 ## Configuration
 
@@ -37,7 +55,7 @@ All options live in `config/e4mc.toml`:
 | `relayHost` / `relayPort` | `test.e4mc.link` / `25575` | Relay used when the broker is disabled |
 | `restoreDedicatedCommands` | `true` | Enable dedicated-server commands such as `/ban` and `/whitelist` |
 | `useWhiteList` | `false` | Use a whitelist on LAN worlds |
-| `offlineMode` | `false` | Run LAN worlds in offline mode (no Mojang authentication) |
+| `offlineMode` | `false` | Run LAN worlds in offline mode with password login for non-premium players |
 | `hostEnabled` | `true` | Share LAN worlds with e4mc |
 | `dialtoneHostEnabled` | `true` | Enable Dialtone peer-to-peer connections as the host |
 | `dialtonePlayerEnabled` | `true` | Enable Dialtone peer-to-peer connections as the player |

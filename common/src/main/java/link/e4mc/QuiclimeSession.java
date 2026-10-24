@@ -227,11 +227,15 @@ public class QuiclimeSession {
                     .forClient()
                     .applicationProtocols("quiclime")
                     .build();
+            boolean offline = Config.INSTANCE.offlineMode.value();
             var codec = new QuicClientCodecBuilder()
                     .sslContext(context)
                     .sslEngineProvider(it -> context.newEngine(it.alloc(), relayInfo.host, relayInfo.port))
                     .initialMaxStreamsBidirectional(512)
-                    .maxIdleTimeout(10, TimeUnit.SECONDS)
+                    // Offline mode: survive 30s network drops instead of 10s (the relay pings every 5s),
+                    // and use BBR, which keeps throughput up on lossy, high-latency links where CUBIC backs off.
+                    .maxIdleTimeout(offline ? 30 : 10, TimeUnit.SECONDS)
+                    .congestionControlAlgorithm(offline ? QuicCongestionControlAlgorithm.BBR : QuicCongestionControlAlgorithm.CUBIC)
                     .initialMaxData(4611686018427387903L)
                     .initialMaxStreamDataBidirectionalRemote(1250000)
                     .initialMaxStreamDataBidirectionalLocal(1250000)

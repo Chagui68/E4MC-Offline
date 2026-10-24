@@ -36,6 +36,9 @@ public class E4mcClient {
             PardonCommand.register(dispatcher);
             WhitelistCommand.register(dispatcher);
         }
+        if (Agnos.isClient()) {
+            OfflineAuth.register(dispatcher);
+        }
         dispatcher.register(
                 Commands.literal("e4mc")
                         .requires(src -> {

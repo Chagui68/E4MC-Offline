@@ -20,7 +20,6 @@
   },
   "client": [
     "ClientHandshakePacketListenerImplMixin",
-    "MinecraftServerMixin",
     "PlayerListMixin",
     "ServerAddressMixin",
     "ServerNameResolverMixin"

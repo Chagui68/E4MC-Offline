@@ -1,9 +1,13 @@
 package link.e4mc.mixin;
 
+import com.mojang.authlib.GameProfile;
 import link.e4mc.DialtoneConnectionExtensions;
+import link.e4mc.OfflineAuth;
 import link.e4mc.dialtone.DialtoneAddress;
 import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.login.ServerboundHelloPacket;
 import net.minecraft.network.protocol.login.ServerboundKeyPacket;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerLoginPacketListenerImpl;
 import net.minecraft.util.Crypt;
 import net.minecraft.util.CryptException;
@@ -26,6 +30,22 @@ import java.util.Arrays;
 public class ServerLoginPacketListenerImplMixin {
     @Shadow @Final
     Connection connection;
+
+    // Vanilla hands the host's profile to anyone using the host's name, before any authentication.
+    // Only the host's own local connection may get it.
+    @Redirect(method = "handleHello", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;getSingleplayerProfile()Lcom/mojang/authlib/GameProfile;"), require = 0)
+    private GameProfile onlyLocalHostProfile(MinecraftServer server) {
+        return connection.isMemoryConnection() ? server.getSingleplayerProfile() : null;
+    }
+
+    // Offline mode: premium names still go through Mojang authentication, the rest join with an offline UUID.
+    @Redirect(method = "handleHello", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;usesAuthentication()Z"), require = 0)
+    private boolean authenticatePremiumOnly(MinecraftServer server, ServerboundHelloPacket packet) {
+        if (OfflineAuth.enabled()) {
+            return OfflineAuth.isPremium(packet.name());
+        }
+        return server.usesAuthentication();
+    }
 
     @Redirect(method = "handleHello", at = @At(value = "INVOKE", target = "Ljava/security/PublicKey;getEncoded()[B"))
     private byte[] killDoubleEncryption(PublicKey instance) {
