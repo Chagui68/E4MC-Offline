@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "e4mc",
   "version": "${version}",
-  "name": "e4mc",
+  "name": "E4MC Offline",
   "description": "Open a LAN server to anyone, anywhere, anytime.",
   "authors": [
     "Chagui68",

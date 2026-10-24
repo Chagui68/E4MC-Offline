@@ -5,7 +5,7 @@ license = "GPL-3.0-only"
 [[mods]]
 modId = "e4mc"
 version = "${version}"
-displayName = "e4mc"
+displayName = "E4MC Offline"
 logoFile = "e4mc_icon.png"
 credits = "skyevg (original e4mc author)"
 authors = "Chagui68, skyevg"
