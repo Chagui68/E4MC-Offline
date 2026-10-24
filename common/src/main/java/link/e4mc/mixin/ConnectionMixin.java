@@ -13,6 +13,7 @@ import link.e4mc.dialtone.DialtoneAmbientSession;
 import link.e4mc.dialtone.DialtoneChannel;
 import net.minecraft.network.Connection;
 import net.minecraft.network.PacketListener;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ServerboundChatCommandPacket;
 import net.minecraft.network.protocol.game.ServerboundChatPacket;
@@ -35,6 +36,8 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions, O
     @Shadow private Channel channel;
     @Shadow private volatile PacketListener packetListener;
     @Shadow public abstract boolean isMemoryConnection();
+    @Shadow public abstract void send(Packet<?> packet);
+    @Shadow public abstract void disconnect(Component reason);
     @Unique
     private static DialtoneAddress e4mc$smuggledDialtoneAddress = null;
     @Unique
@@ -60,6 +63,16 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions, O
         return e4mc$lockedSince;
     }
 
+    // Kick through the Connection itself: the listener's disconnect method moved classes in 1.20.2.
+    @Override
+    public void e4mc$kick(Component reason) {
+        Packet<?> packet = OfflineAuth.disconnectPacket(reason);
+        if (packet != null) {
+            send(packet);
+        }
+        disconnect(reason);
+    }
+
     // Offline mode: drop every gameplay packet from a player that has not logged in yet.
     @Inject(method = "channelRead0(Lio/netty/channel/ChannelHandlerContext;Lnet/minecraft/network/protocol/Packet;)V", at = @At("HEAD"), cancellable = true)
     private void gateUnauthenticated(ChannelHandlerContext ctx, Packet<?> packet, CallbackInfo ci) {
@@ -76,7 +89,7 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions, O
         var server = listener.player.getServer();
         if (lockedFor > OfflineAuth.LOGIN_TIMEOUT_MS) {
             ci.cancel();
-            server.execute(() -> listener.disconnect(Mirror.literal("You did not log in in time.")));
+            e4mc$kick(Mirror.literal("You did not log in in time."));
         } else if (!OfflineAuth.isAllowedWhileLocked(packet)) {
             ci.cancel();
             if (firstPacket || packet instanceof ServerboundChatPacket || packet instanceof ServerboundChatCommandPacket) {

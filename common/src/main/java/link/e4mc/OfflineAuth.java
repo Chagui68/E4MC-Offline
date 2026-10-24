@@ -5,11 +5,11 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import link.e4mc.mixin.ServerCommonPacketListenerImplAccessor;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.common.*;
@@ -21,6 +21,8 @@ import javax.crypto.spec.PBEKeySpec;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -31,9 +33,13 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Base64;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
  * Offline mode login: premium names still authenticate with Mojang, every other name
@@ -55,6 +61,72 @@ public class OfflineAuth {
         void e4mc$setLoggedIn();
         /** Time of the first packet seen while locked, or 0. */
         long e4mc$lockedSince(long now);
+        /** Sends the reason to the client, then closes the connection. */
+        void e4mc$kick(Component reason);
+    }
+
+    // The mod is compiled against 1.20.2 but runs on other versions. Class literals cover the
+    // compile target and Fabric (intermediary names survive package moves); the old names cover
+    // Forge 1.20.1, where these packets still live in the game package.
+    private static final Set<Class<?>> ALLOWED_WHILE_LOCKED = resolveClasses(
+            List.of(
+                    () -> ServerboundKeepAlivePacket.class,
+                    () -> ServerboundPongPacket.class,
+                    () -> ServerboundClientInformationPacket.class,
+                    () -> ServerboundCustomPayloadPacket.class,
+                    () -> ServerboundResourcePackPacket.class,
+                    () -> ServerboundAcceptTeleportationPacket.class,
+                    () -> ServerboundChunkBatchReceivedPacket.class,
+                    () -> ServerboundChatAckPacket.class,
+                    () -> ServerboundChatSessionUpdatePacket.class,
+                    () -> ServerboundConfigurationAcknowledgedPacket.class),
+            "net.minecraft.network.protocol.game.ServerboundKeepAlivePacket",
+            "net.minecraft.network.protocol.game.ServerboundPongPacket",
+            "net.minecraft.network.protocol.game.ServerboundClientInformationPacket",
+            "net.minecraft.network.protocol.game.ServerboundCustomPayloadPacket",
+            "net.minecraft.network.protocol.game.ServerboundResourcePackPacket");
+    private static final Constructor<?> DISCONNECT_PACKET = resolveClasses(
+            List.of(() -> ClientboundDisconnectPacket.class),
+            "net.minecraft.network.protocol.game.ClientboundDisconnectPacket")
+            .stream()
+            .map(clazz -> {
+                try {
+                    return clazz.getConstructor(Component.class);
+                } catch (NoSuchMethodException e) {
+                    return null;
+                }
+            })
+            .filter(java.util.Objects::nonNull)
+            .findFirst()
+            .orElse(null);
+    private static volatile Field connectionField;
+
+    private static Set<Class<?>> resolveClasses(List<Supplier<Class<?>>> literals, String... oldNames) {
+        Set<Class<?>> classes = new HashSet<>();
+        for (Supplier<Class<?>> literal : literals) {
+            try {
+                classes.add(literal.get());
+            } catch (LinkageError ignored) {
+                // Not in this Minecraft version.
+            }
+        }
+        for (String name : oldNames) {
+            try {
+                classes.add(Class.forName(name, false, OfflineAuth.class.getClassLoader()));
+            } catch (ClassNotFoundException | LinkageError ignored) {
+                // Not in this Minecraft version or mapping.
+            }
+        }
+        return classes;
+    }
+
+    /** The disconnect packet for this Minecraft version, or null if it cannot be built. */
+    public static Packet<?> disconnectPacket(Component reason) {
+        try {
+            return DISCONNECT_PACKET == null ? null : (Packet<?>) DISCONNECT_PACKET.newInstance(reason);
+        } catch (ReflectiveOperationException e) {
+            return null;
+        }
     }
 
     public static boolean enabled() {
@@ -100,16 +172,12 @@ public class OfflineAuth {
             String name = command.command().split(" ", 2)[0];
             return name.equals("login") || name.equals("register");
         }
-        return packet instanceof ServerboundKeepAlivePacket
-                || packet instanceof ServerboundPongPacket
-                || packet instanceof ServerboundClientInformationPacket
-                || packet instanceof ServerboundCustomPayloadPacket
-                || packet instanceof ServerboundResourcePackPacket
-                || packet instanceof ServerboundAcceptTeleportationPacket
-                || packet instanceof ServerboundChunkBatchReceivedPacket
-                || packet instanceof ServerboundChatAckPacket
-                || packet instanceof ServerboundChatSessionUpdatePacket
-                || packet instanceof ServerboundConfigurationAcknowledgedPacket;
+        for (Class<?> allowed : ALLOWED_WHILE_LOCKED) {
+            if (allowed.isInstance(packet)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static Component prompt(String name) {
@@ -171,7 +239,7 @@ public class OfflineAuth {
         }
         if (!checkPassword(name, StringArgumentType.getString(ctx, "password"))) {
             // Kick on a wrong password so guessing needs a reconnect per attempt.
-            player.connection.disconnect(Mirror.literal("Wrong password."));
+            state.e4mc$kick(Mirror.literal("Wrong password."));
             return 0;
         }
         state.e4mc$setLoggedIn();
@@ -185,11 +253,31 @@ public class OfflineAuth {
     }
 
     private static State state(ServerPlayer player) {
-        return (State) ((ServerCommonPacketListenerImplAccessor) player.connection).getConnection();
+        return (State) connection(player);
     }
 
     private static boolean needsLogin(ServerPlayer player) {
-        return needsLogin(player.getGameProfile(), ((ServerCommonPacketListenerImplAccessor) player.connection).getConnection().isMemoryConnection());
+        return needsLogin(player.getGameProfile(), connection(player).isMemoryConnection());
+    }
+
+    // The Connection field moved to ServerCommonPacketListenerImpl in 1.20.2, so find it by type.
+    private static Connection connection(ServerPlayer player) {
+        try {
+            if (connectionField == null) {
+                for (Class<?> clazz = player.connection.getClass(); clazz != null && connectionField == null; clazz = clazz.getSuperclass()) {
+                    for (Field field : clazz.getDeclaredFields()) {
+                        if (field.getType() == Connection.class) {
+                            field.setAccessible(true);
+                            connectionField = field;
+                            break;
+                        }
+                    }
+                }
+            }
+            return (Connection) connectionField.get(player.connection);
+        } catch (ReflectiveOperationException | NullPointerException e) {
+            throw new IllegalStateException("Cannot find the player's connection", e);
+        }
     }
 
     private static synchronized Properties accounts() {

@@ -66,12 +66,16 @@ public class DialtoneServerChannel extends AbstractServerChannel {
 
     @Override
     protected void doClose() {
+        closed = true;
+        // Bind can fail before the endpoint exists (e.g. the native library did not load).
+        if (endpoint == null) {
+            return;
+        }
         endpoint.closeAsync().join();
         endpoint.close();
         dispatcher.interrupt();
         endpoint = null;
         dispatcher = null;
-        closed = true;
     }
 
     @Override
