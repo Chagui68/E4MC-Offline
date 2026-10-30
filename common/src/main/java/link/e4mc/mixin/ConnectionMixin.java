@@ -34,6 +34,7 @@ import java.net.InetSocketAddress;
 public abstract class ConnectionMixin implements DialtoneConnectionExtensions, OfflineAuth.State {
 
     @Shadow private Channel channel;
+    @Shadow private boolean encrypted;
     @Shadow private volatile PacketListener packetListener;
     @Shadow public abstract boolean isMemoryConnection();
     @Shadow public abstract void send(Packet<?> packet);
@@ -163,6 +164,14 @@ public abstract class ConnectionMixin implements DialtoneConnectionExtensions, O
             return ret;
         } else {
             return operation.call(instance, inetHost, inetPort);
+        }
+    }
+
+    // Dialtone is already encrypted by QUIC. Mods like Krypton skip their own cipher setup when this flag is set.
+    @Inject(method = "channelActive", at = @At("TAIL"))
+    private void markDialtoneEncrypted(ChannelHandlerContext ctx, CallbackInfo ci) {
+        if (channel instanceof DialtoneChannel) {
+            encrypted = true;
         }
     }
 

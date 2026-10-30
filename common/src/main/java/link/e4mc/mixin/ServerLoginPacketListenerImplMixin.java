@@ -114,7 +114,8 @@ public class ServerLoginPacketListenerImplMixin {
         return instance.getSecretKey(privateKey);
     }
 
-    @Redirect(method = "handleKey", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Crypt;getCipher(ILjava/security/Key;)Ljavax/crypto/Cipher;"))
+    // Krypton redirects this call too; it then wins and skips encryption on Dialtone because the connection is already marked encrypted.
+    @Redirect(method = "handleKey", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Crypt;getCipher(ILjava/security/Key;)Ljavax/crypto/Cipher;"), require = 0)
     private Cipher getCipher(int i, Key key) throws CryptException {
         if (connection.getRemoteAddress() instanceof DialtoneAddress) {
             return null;
